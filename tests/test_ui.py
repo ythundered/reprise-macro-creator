@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import time
 import unittest
@@ -8,6 +9,7 @@ _tmp = tempfile.mkdtemp(prefix="reprise-test-")
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_tmp, "config")
 os.environ["XDG_DATA_HOME"] = os.path.join(_tmp, "data")
+os.environ["APPDATA"] = _tmp
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QPushButton
@@ -247,6 +249,32 @@ class DialogTests(UiCase):
         d.reject()
 
 
+class StartupTests(UiCase):
+    def test_permission_prompt_then_fix(self):
+        calls = []
+        self.b.missing_permissions = lambda: True
+        self.b.fix_permissions = lambda: calls.append("fix") or True
+        orig = win.ask
+        win.ask = lambda *a, **k: "yes"
+        try:
+            self.w._startup_problems()
+        finally:
+            win.ask = orig
+        self.assertEqual(calls, ["fix"])
+
+    def test_declining_does_not_touch_anything(self):
+        calls = []
+        self.b.missing_permissions = lambda: True
+        self.b.fix_permissions = lambda: calls.append("fix") or True
+        orig = win.ask
+        win.ask = lambda *a, **k: "no"
+        try:
+            self.w._startup_problems()
+        finally:
+            win.ask = orig
+        self.assertEqual(calls, [])
+
+
 class CaptureTests(UiCase):
     def key(self, name, down=True):
         self.w._on_input({"kind": "key", "name": name, "down": down, "repeat": False, "t": 0})
@@ -416,7 +444,8 @@ class ProjectTests(UiCase):
         w = self.w
         self.add(new_action("text", text="session"))
         w._save_session()
-        self.assertEqual(os.stat(paths.SESSION_PATH).st_mode & 0o777, 0o600)
+        if sys.platform != "win32":
+            self.assertEqual(os.stat(paths.SESSION_PATH).st_mode & 0o777, 0o600)
         w2 = win.MainWindow(backend=FakeBackend())
         try:
             self.assertEqual(w2.macro["actions"][0]["p"]["text"], "session")

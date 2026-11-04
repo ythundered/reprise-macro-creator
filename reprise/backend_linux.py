@@ -3,7 +3,6 @@ import json
 import os
 import re
 import selectors
-import shutil
 import socket
 import subprocess
 import threading
@@ -15,18 +14,30 @@ import numpy as np
 from evdev import ecodes as E
 
 from .keys import BUTTON_TABLE, KEY_TABLE, MODIFIERS, Keymap, parse_hotkey
+from .paths import clean_env, find_tool
 
 VIRTUAL_NAME = "reprise virtual input"
 PPM_RE = re.compile(rb"P6\s+(\d+)\s+(\d+)\s+\d+\s")
 SELF_CACHE_S = 0.25
+# uaccess gives the logged in user access straight away, no group change or relog
+UDEV_RULE = ('SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"\\n'
+             'KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"\\n')
+UDEV_PATH = "/etc/udev/rules.d/70-reprise-macro-creator.rules"
 
 
 def _detect_layout():
     try:
-        out = subprocess.run(["hyprctl", "getoption", "input:kb_layout", "-j"], capture_output=True, text=True, timeout=2).stdout
+        out = subprocess.run(["hyprctl", "getoption", "input:kb_layout", "-j"], capture_output=True, text=True, timeout=2, env=clean_env()).stdout
         return json.loads(out).get("str", "us").split(",")[0].strip() or "us"
     except (OSError, ValueError, subprocess.SubprocessError):
         return "us"
+
+
+def _tool(name):
+    path, env = find_tool(name)
+    if path is None:
+        raise RuntimeError(f"{name} is not installed")
+    return path, env
 
 
 def _parse_ppm(data):
@@ -65,12 +76,38 @@ class Backend:
             if code is not None:
                 self._ev_codes[ev] = code
         self._code_to_ev = {v: k for k, v in self._ev_codes.items()}
+        self._open_uinput()
+
+    def _open_uinput(self):
         try:
             keys = sorted(set(self._ev_codes.values()))
             self._ui = evdev.UInput({E.EV_KEY: keys, E.EV_REL: [E.REL_X, E.REL_Y, E.REL_WHEEL, E.REL_HWHEEL]},
                                     name=VIRTUAL_NAME)
+            self._ui_error = None
         except (OSError, evdev.UInputError) as e:
             self._ui_error = str(e)
+
+    def missing_permissions(self):
+        return self._ui is None or not evdev.list_devices()
+
+    def fix_permissions(self):
+        script = (f"printf '{UDEV_RULE}' > {UDEV_PATH} && (modprobe uinput 2>/dev/null; true) "
+                  "&& udevadm control --reload-rules && udevadm trigger --subsystem-match=input --subsystem-match=misc")
+        path, env = find_tool("pkexec")
+        if path is None:
+            return False
+        try:
+            if subprocess.run([path, "sh", "-c", script], env=env, timeout=180).returncode != 0:
+                return False
+        except (OSError, subprocess.SubprocessError):
+            return False
+        # udev applies the new access a moment after trigger returns
+        deadline = time.monotonic() + 4
+        while self.missing_permissions() and time.monotonic() < deadline:
+            time.sleep(0.25)
+            if self._ui is None:
+                self._open_uinput()
+        return not self.missing_permissions()
 
     def problems(self):
         out = []
@@ -78,13 +115,11 @@ class Backend:
             out.append("hyprland was not found. the linux backend only works under hyprland.")
         # list_devices silently drops anything unreadable, so empty means no permission
         if not evdev.list_devices():
-            out.append("cannot read /dev/input, so hotkeys and recording will not work. "
-                       "add yourself to the input group and log back in.")
+            out.append("cannot read /dev/input, so hotkeys and recording will not work.")
         if self._ui_error:
-            out.append(f"cannot write to /dev/uinput, so playback will not work: {self._ui_error}. "
-                       "see the permissions section of the readme.")
+            out.append(f"cannot write to /dev/uinput, so playback will not work: {self._ui_error}.")
         for tool, use in (("grim", "screen reading"), ("slurp", "picking from the screen")):
-            if shutil.which(tool) is None:
+            if find_tool(tool)[0] is None:
                 out.append(f"{tool} is not installed, {use} will not work.")
         return out
 
@@ -195,8 +230,9 @@ class Backend:
         x1, x2 = sorted((int(x1), int(x2)))
         y1, y2 = sorted((int(y1), int(y2)))
         w, h = x2 - x1 + 1, y2 - y1 + 1
-        out = subprocess.run(["grim", "-s", "1", "-g", f"{x1},{y1} {w}x{h}", "-t", "ppm", "-"],
-                             capture_output=True, timeout=10)
+        grim, env = _tool("grim")
+        out = subprocess.run([grim, "-s", "1", "-g", f"{x1},{y1} {w}x{h}", "-t", "ppm", "-"],
+                             capture_output=True, timeout=10, env=env)
         if out.returncode != 0:
             raise RuntimeError(out.stderr.decode(errors="replace").strip() or "grim failed")
         return _parse_ppm(out.stdout)
@@ -209,17 +245,20 @@ class Backend:
     def save_region(self, x1, y1, x2, y2, path):
         x1, x2 = sorted((int(x1), int(x2)))
         y1, y2 = sorted((int(y1), int(y2)))
-        subprocess.run(["grim", "-s", "1", "-g", f"{x1},{y1} {x2 - x1 + 1}x{y2 - y1 + 1}", path], check=True, timeout=10)
+        grim, env = _tool("grim")
+        subprocess.run([grim, "-s", "1", "-g", f"{x1},{y1} {x2 - x1 + 1}x{y2 - y1 + 1}", path], check=True, timeout=10, env=env)
 
     def pick_point(self):
-        r = subprocess.run(["slurp", "-p", "-b", "00000000", "-c", "5b9dffff"], capture_output=True, text=True)
+        slurp, env = _tool("slurp")
+        r = subprocess.run([slurp, "-p", "-b", "00000000", "-c", "5b9dffff"], capture_output=True, text=True, env=env)
         if r.returncode != 0:
             return None
         pos = r.stdout.split()[0].split(",")
         return int(pos[0]), int(pos[1])
 
     def pick_region(self):
-        r = subprocess.run(["slurp", "-b", "0b0c1088", "-c", "5b9dffff", "-w", "2"], capture_output=True, text=True)
+        slurp, env = _tool("slurp")
+        r = subprocess.run([slurp, "-b", "0b0c1088", "-c", "5b9dffff", "-w", "2"], capture_output=True, text=True, env=env)
         if r.returncode != 0:
             return None
         xy, wh = r.stdout.split()
@@ -338,7 +377,7 @@ class Backend:
         return False
 
     def run(self, command):
-        return subprocess.Popen(command, shell=True, start_new_session=True,
+        return subprocess.Popen(command, shell=True, start_new_session=True, env=clean_env(),
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def key_down(self, name):

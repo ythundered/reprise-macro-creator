@@ -1,6 +1,7 @@
 import ctypes
 import os
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -135,6 +136,12 @@ class Backend:
 
     def problems(self):
         return []
+
+    def missing_permissions(self):
+        return False
+
+    def fix_permissions(self):
+        return True
 
     def cursor_pos(self):
         p = W.POINT()
@@ -297,7 +304,15 @@ class Backend:
         return pid.value == os.getpid()
 
     def run(self, command):
-        return subprocess.Popen(command, shell=True)
+        # the one-file build sets a dll directory that child programs would inherit
+        frozen = getattr(sys, "frozen", False)
+        if frozen:
+            kernel32.SetDllDirectoryW(None)
+        try:
+            return subprocess.Popen(command, shell=True)
+        finally:
+            if frozen:
+                kernel32.SetDllDirectoryW(sys._MEIPASS)
 
     def key_down(self, name):
         return str(name).lower() in self.pressed

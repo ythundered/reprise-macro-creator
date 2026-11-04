@@ -39,6 +39,12 @@ class FakeBackend:
     def problems(self):
         return []
 
+    def missing_permissions(self):
+        return False
+
+    def fix_permissions(self):
+        return True
+
     def cursor_pos(self):
         return self.cursor
 

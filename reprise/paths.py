@@ -1,6 +1,8 @@
 import os
+import shutil
 import sys
 
+FROZEN = getattr(sys, "frozen", False)
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 if sys.platform == "win32":
@@ -16,6 +18,28 @@ SESSION_PATH = os.path.join(CONFIG_DIR, "session.reprise")
 IMAGES_DIR = os.path.join(DATA_DIR, "images")
 EXAMPLE_PATH = os.path.join(ASSETS, "example.reprise")
 ICON_PATH = os.path.join(ASSETS, "icon-256.png")
+
+
+def clean_env():
+    # the one-file build points LD_LIBRARY_PATH at its own libs, system programs must not see that
+    env = dict(os.environ)
+    if FROZEN and sys.platform != "win32":
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        env.pop("LD_LIBRARY_PATH", None)
+        if orig:
+            env["LD_LIBRARY_PATH"] = orig
+    return env
+
+
+def find_tool(name):
+    found = shutil.which(name)
+    if found:
+        return found, clean_env()
+    if FROZEN:
+        bundled = os.path.join(sys._MEIPASS, "tools", name)
+        if os.path.exists(bundled):
+            return bundled, dict(os.environ)
+    return None, None
 
 
 def asset(name):

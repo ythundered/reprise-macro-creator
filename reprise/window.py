@@ -74,7 +74,7 @@ class MacroTable(QTableView):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, open_path=None, backend=None):
+    def __init__(self, open_path=None, backend=None, quiet=False):
         super().__init__()
         self.mono_family = self._pick_mono()
         self.mono_small = QFont(self.mono_family)
@@ -116,9 +116,20 @@ class MainWindow(QMainWindow):
         threading.Thread(target=self._spy_loop, daemon=True).start()
         self.table.setFocus()
         self._sync_actions()
-        probs = self.backend.problems()
-        if probs:
-            QTimer.singleShot(400, lambda: message(self, APP_NAME, "\n\n".join(probs), QMessageBox.Warning))
+        if not quiet and self.backend.problems():
+            QTimer.singleShot(400, self._startup_problems)
+
+    def _startup_problems(self):
+        if self.backend.missing_permissions():
+            choice = ask(self, APP_NAME, "to record and play macros, this app needs access to your keyboard and mouse.\n\n"
+                         "allowing it asks for your password once. it also lets other programs you run read "
+                         "your keyboard and mouse, so only do this on a computer you trust.",
+                         (("allow", QMessageBox.AcceptRole, "yes"), ("not now", QMessageBox.RejectRole, "no")))
+            if choice == "yes" and not self.backend.fix_permissions():
+                message(self, APP_NAME, "that did not work. see the permissions section of the readme.", QMessageBox.Warning)
+        rest = self.backend.problems()
+        if rest:
+            message(self, APP_NAME, "\n\n".join(rest), QMessageBox.Warning)
 
     @property
     def busy(self):
