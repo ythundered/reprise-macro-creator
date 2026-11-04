@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reprise-macro-creator"
+description = "record, edit and replay mouse and keyboard macros, with autohotkey export"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dynamic = ["version"]
+dependencies = [
+    "PySide6>=6.5",
+    "numpy>=1.24",
+    "Pillow>=9.0",
+    "evdev>=1.6; sys_platform == 'linux'",
+]
+
+[project.urls]
+Homepage = "https://github.com/ythundered/reprise-macro-creator"
+
+[project.gui-scripts]
+reprise = "reprise.app:main"
+
+[tool.setuptools]
+packages = ["reprise"]
+
+[tool.setuptools.dynamic]
+version = { attr = "reprise.__version__" }
+
+[tool.setuptools.package-data]
+reprise = ["assets/*"]

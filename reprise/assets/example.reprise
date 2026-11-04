@@ -1,0 +1,25 @@
+{
+ "app": "reprise macro creator",
+ "version": 1,
+ "macros": [
+  {
+   "name": "example",
+   "hotkey": "",
+   "repeat": 1,
+   "speed": 1.0,
+   "actions": [
+    {"type": "comment", "p": {"text": "this macro only shows messages, it will not touch your mouse or keyboard"}},
+    {"type": "setvar", "p": {"var": "total", "mode": "expression", "value": "0"}},
+    {"type": "loop", "p": {"kind": "count", "count": 3}},
+    {"type": "setvar", "p": {"var": "total", "mode": "expression", "value": "total + a_index"}},
+    {"type": "sleep", "p": {"ms": 300, "random_to": 0}},
+    {"type": "endloop"},
+    {"type": "if", "p": {"kind": "expression", "expr": "total = 6"}},
+    {"type": "msgbox", "p": {"title": "reprise macro creator", "text": "the loop ran 3 times and total is %total%.\n\nnow try record, or add steps from the left."}},
+    {"type": "else"},
+    {"type": "msgbox", "p": {"title": "reprise macro creator", "text": "total came out as %total%"}},
+    {"type": "endif"}
+   ]
+  }
+ ]
+}
