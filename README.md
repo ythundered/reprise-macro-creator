@@ -6,12 +6,12 @@
 
 record what you do with your mouse and keyboard, edit it as a list of steps, and play it back.
 
+[![release](https://img.shields.io/github/v/release/ythundered/reprise-macro-creator?style=flat-square&label=release&color=5b9dff)](https://github.com/ythundered/reprise-macro-creator/releases/latest)
 [![tests](https://img.shields.io/github/actions/workflow/status/ythundered/reprise-macro-creator/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/ythundered/reprise-macro-creator/actions/workflows/tests.yml)
 [![license](https://img.shields.io/badge/license-mit-5b9dff?style=flat-square)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.10%2B-5b9dff?style=flat-square)](https://www.python.org)
-[![platform](https://img.shields.io/badge/platform-linux%20%2F%20hyprland-5b9dff?style=flat-square)](#platforms)
+[![platform](https://img.shields.io/badge/platform-hyprland%20%2F%20windows-5b9dff?style=flat-square)](#platforms)
 
-[install](#install) &nbsp;|&nbsp; [using it](#using-it) &nbsp;|&nbsp; [how it works](#how-it-works) &nbsp;|&nbsp; [tests](#tests)
+[download](#download) &nbsp;|&nbsp; [using it](#using-it) &nbsp;|&nbsp; [how it works](#how-it-works) &nbsp;|&nbsp; [tests](#tests)
 
 </div>
 
@@ -28,15 +28,63 @@ record what you do with your mouse and keyboard, edit it as a list of steps, and
 > [!NOTE]
 > this is a first release. the test suite runs against a fake input backend, so real playback has had far less mileage than the rest. exported scripts follow autohotkey v1 syntax but have not been run through autohotkey itself yet. bug reports are welcome.
 
-## platforms
+## download
+
+one file, nothing else to install. python, qt and everything else are inside it.
+
+| system | file |
+| :--- | :--- |
+| windows 10 / 11 | [**reprise-macro-creator-windows-x64.exe**](https://github.com/ythundered/reprise-macro-creator/releases/latest/download/reprise-macro-creator-windows-x64.exe) |
+| linux on hyprland | [**reprise-macro-creator-linux-x86_64**](https://github.com/ythundered/reprise-macro-creator/releases/latest/download/reprise-macro-creator-linux-x86_64) |
+
+**windows:** double-click it. the exe isn't code signed, so windows may warn you the first time. choose more info, then run anyway.
+
+**linux:** browsers drop the executable flag, so set it once and run it:
+
+```sh
+chmod +x reprise-macro-creator-linux-x86_64
+./reprise-macro-creator-linux-x86_64
+```
+
+it adds itself to your app menu the first time it runs, and shows up as reprise macro creator after that. startup takes a second or two because it unpacks itself each time.
+
+### platforms
 
 | platform | status |
 | :--- | :--- |
 | linux on hyprland | the target platform |
 | other linux desktops | not supported, cursor moves and window control go through hyprland |
-| windows | a backend is written but has never been run, expect bugs |
+| windows | starts and passes its backend tests on windows in ci, but hasn't had real use yet |
 
-## install
+### linux permissions
+
+the app reads `/dev/input` for hotkeys and recording, and writes to `/dev/uinput` for playback. if it can't, it offers to fix that on first launch and asks for your password once. no relog needed.
+
+> [!CAUTION]
+> this lets any program you run read your keyboard and mouse while you're logged in, not just this one. only do it on a computer you trust.
+
+<details>
+<summary><b>doing it by hand</b></summary>
+
+<br>
+
+```sh
+sudo tee /etc/udev/rules.d/70-reprise-macro-creator.rules <<'RULES'
+SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"
+RULES
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=input --subsystem-match=misc
+```
+
+delete that file to undo it.
+
+</details>
+
+<details>
+<summary><b>running from source</b></summary>
+
+<br>
 
 you need python 3.10 or newer. on linux you also need `grim` and `slurp`.
 
@@ -49,20 +97,9 @@ python3 -m reprise
 
 on linux, `./install.sh` adds a `reprise` command and an app menu entry.
 
-### linux permissions
+to build the single-file version yourself: `pip install pyinstaller`, then `pyinstaller packaging/reprise.spec`. the builds on the releases page come from [`release.yml`](.github/workflows/release.yml).
 
-the app reads `/dev/input` for hotkeys and recording, and writes to `/dev/uinput` for playback. it tells you on startup if it can't.
-
-```sh
-sudo usermod -aG input $USER
-echo 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-reprise-uinput.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-log out and back in afterwards.
-
-> [!CAUTION]
-> anything in the `input` group can read every keystroke on the machine, so only do this on a computer you trust.
+</details>
 
 ## using it
 

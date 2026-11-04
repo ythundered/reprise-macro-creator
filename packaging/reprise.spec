@@ -25,7 +25,7 @@ a = Analysis(
 # qt ships a lot this app never loads
 DROP = ("qt6quick", "qt6qml", "qt6network", "qt6pdf", "qt6virtualkeyboard", "qvnc", "qeglfs", "qlinuxfb", "qminimal",
         "qvkkhrdisplay", "qdirect2d", "eglfs", "opengl32sw", "/translations/", "\\translations\\", "virtualkeyboard",
-        "networkinformation", "/tls/", "\\tls\\", "qpdf", "qicns", "qtga", "qtiff", "qwbmp", "qwebp")
+        "networkinformation", "/tls/", "\\tls\\", "qgtk3", "libgtk-3", "libgdk-3", "qpdf", "qicns", "qtga", "qtiff", "qwbmp", "qwebp")
 
 
 def keep(entry):

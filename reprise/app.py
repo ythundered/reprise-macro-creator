@@ -7,7 +7,7 @@ import sys
 import traceback
 
 from PySide6.QtCore import QLibraryInfo, QTimer
-from PySide6.QtGui import QColor, QIcon, QImageReader, QPalette
+from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImageReader, QPalette
 from PySide6.QtWidgets import QApplication
 
 from . import APP_NAME, __version__
@@ -38,7 +38,8 @@ FONTS_CONF = """<?xml version="1.0"?>
  <dir prefix="xdg">fonts</dir>
  <dir>~/.fonts</dir>
  <cachedir prefix="xdg">reprise/fontconfig</cachedir>
- <alias><family>sans-serif</family><prefer><family>Noto Sans</family><family>Cantarell</family><family>DejaVu Sans</family><family>Liberation Sans</family></prefer></alias>
+ <match target="pattern"><edit name="family" mode="append_last"><string>sans-serif</string></edit></match>
+ <alias><family>sans-serif</family><prefer><family>Noto Sans</family><family>Cantarell</family><family>Ubuntu</family><family>DejaVu Sans</family><family>Liberation Sans</family></prefer></alias>
  <alias><family>monospace</family><prefer><family>JetBrains Mono</family><family>Noto Sans Mono</family><family>DejaVu Sans Mono</family><family>Liberation Mono</family></prefer></alias>
 </fontconfig>
 """
@@ -52,6 +53,19 @@ def use_own_font_config():
         os.environ["FONTCONFIG_FILE"] = path
     except OSError:
         pass
+
+
+UI_FONTS = ("Noto Sans", "Cantarell", "Ubuntu", "DejaVu Sans", "Liberation Sans", "Roboto", "Open Sans")
+
+
+def pick_ui_font(font):
+    # without a desktop config qt can land on whatever font sorts first
+    installed = set(QFontDatabase.families())
+    for family in UI_FONTS:
+        if family in installed:
+            font.setFamily(family)
+            break
+    return font
 
 
 def add_to_app_menu():
@@ -86,7 +100,7 @@ def smoke_report(window):
         "svg": b"svg" in [bytes(f) for f in QImageReader.supportedImageFormats()],
         "icon": not QIcon(ICON_PATH).isNull(), "screen": window.backend.screen_size(),
         "problems": window.backend.problems(), "title": window.windowTitle(), "tools": {},
-        "qt_platform": QApplication.platformName(),
+        "qt_platform": QApplication.platformName(), "font": QFontInfo(QApplication.font()).family(),
     }
     try:
         report["pixel"] = window.backend.pixel(0, 0)
@@ -122,6 +136,8 @@ def main():
     app.setStyle("Fusion")
     app.setPalette(build_palette())
     f = app.font()
+    if FROZEN and sys.platform != "win32":
+        f = pick_ui_font(f)
     f.setPointSize(10)
     app.setFont(f)
     w = MainWindow(open_path=args[0] if args else None, quiet=smoke_path is not None)
