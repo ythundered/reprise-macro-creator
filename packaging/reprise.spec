@@ -21,6 +21,23 @@ a = Analysis(
     excludes=["tkinter", "unittest", "pydoc", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtNetwork",
               "PySide6.QtWebEngineCore", "PySide6.QtMultimedia", "PySide6.Qt3DCore"],
 )
+
+# qt ships a lot this app never loads
+DROP = ("qt6quick", "qt6qml", "qt6network", "qt6pdf", "qt6virtualkeyboard", "qvnc", "qeglfs", "qlinuxfb", "qminimal",
+        "qvkkhrdisplay", "qdirect2d", "eglfs", "opengl32sw", "/translations/", "\\translations\\", "virtualkeyboard",
+        "networkinformation", "/tls/", "\\tls\\", "qpdf", "qicns", "qtga", "qtiff", "qwbmp", "qwebp")
+
+
+def keep(entry):
+    low = entry[0].lower()
+    return not any(d in low for d in DROP)
+
+
+a.binaries = [b for b in a.binaries if keep(b)]
+a.datas = [d for d in a.datas if keep(d)]
+for size, dest in sorted(((os.path.getsize(b[1]), b[0]) for b in a.binaries), reverse=True)[:25]:
+    print(f"{size / 1e6:7.1f} MB  {dest}")
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

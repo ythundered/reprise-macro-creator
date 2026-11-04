@@ -11,7 +11,7 @@ from PySide6.QtGui import QColor, QIcon, QImageReader, QPalette
 from PySide6.QtWidgets import QApplication
 
 from . import APP_NAME, __version__
-from .paths import FROZEN, ICON_PATH, asset, find_tool
+from .paths import DATA_DIR, FROZEN, ICON_PATH, asset, find_tool, write_atomic
 from .theme import C
 from .window import MainWindow
 
@@ -28,6 +28,30 @@ def build_palette():
     pal.setColor(QPalette.Disabled, QPalette.Text, QColor(C["faint"]))
     pal.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(C["faint"]))
     return pal
+
+
+FONTS_CONF = """<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+ <dir>/usr/share/fonts</dir>
+ <dir>/usr/local/share/fonts</dir>
+ <dir prefix="xdg">fonts</dir>
+ <dir>~/.fonts</dir>
+ <cachedir prefix="xdg">reprise/fontconfig</cachedir>
+ <alias><family>sans-serif</family><prefer><family>Noto Sans</family><family>Cantarell</family><family>DejaVu Sans</family><family>Liberation Sans</family></prefer></alias>
+ <alias><family>monospace</family><prefer><family>JetBrains Mono</family><family>Noto Sans Mono</family><family>DejaVu Sans Mono</family><family>Liberation Mono</family></prefer></alias>
+</fontconfig>
+"""
+
+
+def use_own_font_config():
+    # the bundled fontconfig is older than most distros and chokes on their /etc/fonts
+    path = os.path.join(DATA_DIR, "fonts.conf")
+    try:
+        write_atomic(path, FONTS_CONF)
+        os.environ["FONTCONFIG_FILE"] = path
+    except OSError:
+        pass
 
 
 def add_to_app_menu():
@@ -62,7 +86,12 @@ def smoke_report(window):
         "svg": b"svg" in [bytes(f) for f in QImageReader.supportedImageFormats()],
         "icon": not QIcon(ICON_PATH).isNull(), "screen": window.backend.screen_size(),
         "problems": window.backend.problems(), "title": window.windowTitle(), "tools": {},
+        "qt_platform": QApplication.platformName(),
     }
+    try:
+        report["pixel"] = window.backend.pixel(0, 0)
+    except (OSError, RuntimeError, ValueError) as e:
+        report["pixel"] = f"failed: {e}"
     if sys.platform != "win32":
         for name in ("grim", "slurp"):
             path, env = find_tool(name)
@@ -83,8 +112,10 @@ def main():
         del args[at:at + 2]
     if sys.platform != "win32":
         os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
-        if FROZEN and smoke_path is None:
-            add_to_app_menu()
+        if FROZEN:
+            use_own_font_config()
+            if smoke_path is None:
+                add_to_app_menu()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName("reprise")
@@ -99,6 +130,7 @@ def main():
         def finish():
             with open(smoke_path, "w", encoding="utf-8") as f:
                 json.dump(smoke_report(w), f, indent=1)
+            w.grab().save(smoke_path + ".png")
             w.close()
         QTimer.singleShot(1500, finish)
 

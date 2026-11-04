@@ -49,6 +49,7 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: dist/${{ matrix.asset }}
+          compression-level: 0
           if-no-files-found: error
 
   publish:

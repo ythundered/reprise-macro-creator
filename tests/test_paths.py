@@ -15,6 +15,8 @@ class PathTests(unittest.TestCase):
         with mock.patch.object(paths, "FROZEN", True):
             with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": "/bundle", "LD_LIBRARY_PATH_ORIG": "/sys"}):
                 self.assertEqual(paths.clean_env()["LD_LIBRARY_PATH"], "/sys")
+            with mock.patch.dict(os.environ, {"FONTCONFIG_FILE": "/bundle/fonts.conf"}):
+                self.assertNotIn("FONTCONFIG_FILE", paths.clean_env())
             env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH_ORIG"}
             with mock.patch.dict(os.environ, dict(env, LD_LIBRARY_PATH="/bundle"), clear=True):
                 self.assertNotIn("LD_LIBRARY_PATH", paths.clean_env())

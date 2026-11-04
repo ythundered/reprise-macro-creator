@@ -26,6 +26,7 @@ def clean_env():
     if FROZEN and sys.platform != "win32":
         orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
         env.pop("LD_LIBRARY_PATH", None)
+        env.pop("FONTCONFIG_FILE", None)
         if orig:
             env["LD_LIBRARY_PATH"] = orig
     return env
